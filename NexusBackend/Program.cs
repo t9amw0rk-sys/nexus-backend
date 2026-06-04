@@ -10,9 +10,24 @@ using NexusBackend.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Database
+// ✅ DATABASE_URL من Railway أو fallback للـ appsettings
+var dbUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+string connectionString;
+
+if (!string.IsNullOrEmpty(dbUrl))
+{
+    // Railway بيبعت URL بالشكل ده: postgresql://user:pass@host:port/db
+    var uri = new Uri(dbUrl);
+    var userInfo = uri.UserInfo.Split(':');
+    connectionString = $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
+}
+else
+{
+    connectionString = builder.Configuration.GetConnectionString("DefaultConnection")!;
+}
+
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(connectionString));
 
 // Identity
 builder.Services.AddIdentity<AppUser, AppRole>(options =>
@@ -74,22 +89,17 @@ builder.Services.AddScoped<ICommentService, CommentService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IUserService, UserService>();
 
-// Controllers
 builder.Services.AddControllers();
-
-// Swagger
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
-// Seed Database
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     await DatabaseSeeder.SeedAsync(services);
 }
 
-// Middleware Pipeline
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
