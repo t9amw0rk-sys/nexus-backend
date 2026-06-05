@@ -16,7 +16,6 @@ string connectionString;
 
 if (!string.IsNullOrEmpty(dbUrl))
 {
-    // Railway بيبعت URL بالشكل ده: postgresql://user:pass@host:port/db
     var uri = new Uri(dbUrl);
     var userInfo = uri.UserInfo.Split(':');
     connectionString = $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
@@ -94,10 +93,12 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
+// ✅ Migrate + Seed
 using (var scope = app.Services.CreateScope())
 {
-    var services = scope.ServiceProvider;
-    await DatabaseSeeder.SeedAsync(services);
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.MigrateAsync();
+    await DatabaseSeeder.SeedAsync(scope.ServiceProvider);
 }
 
 if (app.Environment.IsDevelopment())
