@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NexusBackend.DTOs;
@@ -20,7 +22,6 @@ public class AuthController : ControllerBase
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterDTO dto)
     {
-        // BUG FIX: كان بيرجع 200 مش 201 للـ Created
         var result = await _authService.RegisterAsync(dto);
         return StatusCode(201, ApiResponse<AuthResponseDTO>.Created(result, "Registered successfully."));
     }
@@ -45,5 +46,35 @@ public class AuthController : ControllerBase
     {
         await _authService.LogoutAsync(dto.RefreshToken);
         return Ok(ApiResponse<string>.Ok("Logged out successfully."));
+    }
+
+    [HttpGet("google/login")]
+    public IActionResult GoogleLogin()
+    {
+        var redirectUrl = Url.Action("GoogleCallback", "Auth");
+        var properties = new AuthenticationProperties
+        {
+            RedirectUri = redirectUrl
+        };
+        return Challenge(properties, GoogleDefaults.AuthenticationScheme);
+    }
+
+    [HttpGet("google/callback")]
+    public async Task<IActionResult> GoogleCallback()
+    {
+        var result = await HttpContext.AuthenticateAsync(GoogleDefaults.AuthenticationScheme);
+        if (!result.Succeeded)
+            return Redirect("https://nexus-frontend.t9am-w0rk.workers.dev/login?error=google_failed");
+
+        var email = result.Principal!.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value;
+        var name = result.Principal.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value;
+
+        if (email == null)
+            return Redirect("https://nexus-frontend.t9am-w0rk.workers.dev/login?error=no_email");
+
+        var user = await _authService.FindOrCreateGoogleUserAsync(email, name ?? email);
+        var tokens = await _authService.GenerateTokensForUserAsync(user);
+
+        return Redirect($"https://nexus-frontend.t9am-w0rk.workers.dev/auth/callback?accessToken={tokens.AccessToken}&refreshToken={tokens.RefreshToken}");
     }
 }

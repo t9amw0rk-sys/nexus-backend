@@ -12,6 +12,8 @@ public interface IAuthService
     Task<AuthResponseDTO> LoginAsync(LoginDTO dto);
     Task<AuthResponseDTO> RefreshTokenAsync(string refreshToken);
     Task LogoutAsync(string refreshToken);
+    Task<AppUser> FindOrCreateGoogleUserAsync(string email, string fullName);
+    Task<AuthResponseDTO> GenerateTokensForUserAsync(AppUser user);
 }
 
 public class AuthService : IAuthService
@@ -93,6 +95,34 @@ public class AuthService : IAuthService
         }
     }
 
+    public async Task<AppUser> FindOrCreateGoogleUserAsync(string email, string fullName)
+    {
+        var user = await _userManager.FindByEmailAsync(email);
+        if (user != null)
+            return user;
+
+        user = new AppUser
+        {
+            FullName = fullName,
+            Email = email,
+            UserName = email,
+            IsActive = true,
+            EmailConfirmed = true
+        };
+
+        var result = await _userManager.CreateAsync(user);
+        if (!result.Succeeded)
+            throw new ArgumentException(string.Join(", ", result.Errors.Select(e => e.Description)));
+
+        await _userManager.AddToRoleAsync(user, "User");
+        return user;
+    }
+
+    public async Task<AuthResponseDTO> GenerateTokensForUserAsync(AppUser user)
+    {
+        return await GenerateAuthResponse(user);
+    }
+
     private async Task<AuthResponseDTO> GenerateAuthResponse(AppUser user)
     {
         var roles = await _userManager.GetRolesAsync(user);
@@ -101,7 +131,6 @@ public class AuthService : IAuthService
 
         var refreshTokenDays = int.Parse(_config["JwtSettings:RefreshTokenExpiryDays"]!);
 
-        // حذف الـ refresh tokens القديمة للمستخدم ده قبل إضافة الجديدة
         var oldTokens = await _context.RefreshTokens
             .Where(r => r.UserId == user.Id && !r.IsRevoked)
             .ToListAsync();

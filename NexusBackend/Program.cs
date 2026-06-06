@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -63,6 +64,12 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
         ClockSkew = TimeSpan.Zero
     };
+})
+.AddGoogle(options =>
+{
+    options.ClientId = builder.Configuration["GoogleAuth:ClientId"]!;
+    options.ClientSecret = builder.Configuration["GoogleAuth:ClientSecret"]!;
+    options.CallbackPath = "/api/auth/google/callback";
 });
 
 // CORS
